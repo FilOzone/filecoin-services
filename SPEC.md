@@ -83,7 +83,8 @@ The terminate fee applies only in the **consent case**: when the SP calls `termi
 #### Lifecycle Reserve
 
 The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created.
-Datasets on FilecoinPayV1 hold it as `lockupFixed` on their PDP rail; datasets on FilecoinPayV2 hold it as a lock on their PDP rail.
+Datasets on FilecoinPayV1 hold it as `lockupFixed` on their PDP rail.
+Datasets on FilecoinPayV2 have no reserve to refill: FWSS pays each one-time fee from the client's FilecoinPayV2 balance when it arises, so their PDP rail keeps only the scaled terminate fee locked.
 Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
 
 ```
@@ -163,7 +164,8 @@ Clients pay for storage by depositing the currency selected by their dataset's t
 The selected terms' `payVersion` decides where the rails open.
 With FilecoinPayV1 terms, including record zero, they open on FilecoinPayV1, where the client grants FWSS operator approval for that currency.
 A client opts a new dataset into FilecoinPayV2 by signing the ID of terms registered with `payVersion` 1.
-On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and FWSS opens the rails and locks their reserves in one `executeScript` call.
+On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and in one `executeScript` call FWSS opens the rails, locks the terminate fee and the CDN lockups, and pays the creation fee to the payee.
+Scheduling piece removals on FilecoinPayV2 pays its fee to the payee at once, with a lock and a disburse on the PDP rail.
 That grant has no rate or lockup allowance like the FilecoinPayV1 operator approval, so only FWSS's own logic bounds what it locks and charges on those rails.
 The rest of this specification after creation still describes FilecoinPayV1 rails; FilecoinPayV2 data sets do not yet support piece additions, settlement, termination or the CDN flows.
 Funds flow to providers over time based on the storage rate.
@@ -176,7 +178,7 @@ lockupRequired = finalRate × EPOCHS_PER_MONTH
 
 An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve.
 On FilecoinPayV1, creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions.
-On FilecoinPayV2 the balance only has to cover the locks; FilecoinPayV2 reverts the script when it does not.
+On FilecoinPayV2 the balance only has to cover the locks and the creation fee; FilecoinPayV2 reverts the script when it does not.
 For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
 **Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
@@ -465,7 +467,7 @@ sequenceDiagram
     FWSS->>ServiceProviderRegistry: getProviderPayee(providerId)
     ServiceProviderRegistry-->>FWSS: payee address
     alt FilecoinPayV2 storage terms
-      FWSS->>FilecoinPayV2: executeScript(CREATE_RAIL, createRail + lock per rail)
+      FWSS->>FilecoinPayV2: executeScript(CREATE_RAIL, createRail + lock per rail, disburse creation fee)
       FilecoinPayV2-->>FWSS: rails created
     else FilecoinPayV1 storage terms
       FWSS->>FilecoinPayV1: createRail(client, payee, ...)

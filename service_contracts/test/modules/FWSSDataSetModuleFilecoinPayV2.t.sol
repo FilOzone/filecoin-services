@@ -18,7 +18,8 @@ import {
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
     LIFECYCLE_RESERVE_TARGET,
-    STORAGE_PRICE_PER_TIB_PER_MONTH
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TERMINATE_FEE
 } from "../../src/lib/PriceListUSDFC.sol";
 import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
@@ -40,7 +41,8 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     using RailIdLibrary for Stream;
 
     uint64 private constant CDN_RAIL_NONCE_FLAG = 1 << 62;
-    uint256 private constant MIN_FUNDS = LIFECYCLE_RESERVE_TARGET; // creation locks only the lifecycle reserve
+    // creation locks the termination fee on the PDP rail and pays the creation fee through it
+    uint256 private constant MIN_FUNDS = TERMINATE_FEE + CREATE_DATA_SET_FEE;
     uint256 private constant MIN_FUNDS_CDN = MIN_FUNDS + DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
 
     address private payer;
@@ -116,6 +118,10 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         return filecoinPayV2.balanceOf(payer, uint256(uint160(address(mockUSDFC))));
     }
 
+    function _payeeBalance(address payee, address token) private view returns (uint256) {
+        return filecoinPayV2.balanceOf(payee, uint256(uint160(token)));
+    }
+
     /// @dev The railIds of Pay's RailCreated events, in order, after checking their payer and operator.
     function _railsCreated(Vm.Log[] memory logs) private view returns (uint256[] memory railIds) {
         railIds = new uint256[](logs.length);
@@ -168,16 +174,17 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         assertEq(info.cdnRailId, 0);
         assertEq(info.payer, payer);
         assertEq(info.payee, serviceProvider);
-        assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
-        assertEq(info.pendingOneTimePayments, CREATE_DATA_SET_FEE);
+        assertEq(info.lifecycleReserveBalance, TERMINATE_FEE);
+        assertEq(info.pendingOneTimePayments, 0, "creation fee already paid");
         assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), dataSetId);
         assertEq(pdpServiceWithPayments.clientNonces(payer, 7), dataSetId);
 
         StreamState memory rail = _rail(pdpRailId);
         assertTrue(RailIdLibrary.exists(rail), "PDP rail exists");
-        assertEq(rail.available, LIFECYCLE_RESERVE_TARGET, "lifecycle reserve locked");
+        assertEq(rail.available, TERMINATE_FEE, "termination fee locked");
         assertEq(rail.incomingRate, 0);
-        assertEq(_usdfcBalance(), 10e18 - LIFECYCLE_RESERVE_TARGET);
+        assertEq(_usdfcBalance(), 10e18 - MIN_FUNDS);
+        assertEq(_payeeBalance(serviceProvider, address(mockUSDFC)), CREATE_DATA_SET_FEE, "creation fee paid");
     }
 
     function testCreatesThreeRailsOnFilecoinPayV2WithCDN() public {
@@ -217,13 +224,10 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         assertEq(info.cacheMissRailId, cacheMissRailId);
         assertEq(info.cdnRailId, cdnRailId);
 
-        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET);
+        assertEq(_rail(pdpRailId).available, TERMINATE_FEE);
         assertEq(_rail(cacheMissRailId).available, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
         assertEq(_rail(cdnRailId).available, DEFAULT_CDN_LOCKUP_AMOUNT);
-        assertEq(
-            _usdfcBalance(),
-            10e18 - LIFECYCLE_RESERVE_TARGET - DEFAULT_CACHE_MISS_LOCKUP_AMOUNT - DEFAULT_CDN_LOCKUP_AMOUNT
-        );
+        assertEq(_usdfcBalance(), 10e18 - MIN_FUNDS - DEFAULT_CACHE_MISS_LOCKUP_AMOUNT - DEFAULT_CDN_LOCKUP_AMOUNT);
     }
 
     function _fundV1Payer(uint256 amount) private {
@@ -261,7 +265,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     function testCreatesWithExactMinimumFunds() public {
         _fundV2Payer(payer, MIN_FUNDS);
         uint256 dataSetId = _create(serviceProvider, _payload(0, false));
-        assertEq(_usdfcBalance(), MIN_FUNDS - LIFECYCLE_RESERVE_TARGET);
+        assertEq(_usdfcBalance(), 0);
 
         _fundV2Payer(payer, MIN_FUNDS_CDN - _usdfcBalance());
         uint256 cdnDataSetId = _create(serviceProvider, _payload(1, true));
@@ -330,8 +334,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     }
 
     function testRollsBackCreationWhenLastLockFails() public {
-        uint256 lockedTotal = LIFECYCLE_RESERVE_TARGET + DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
-        _fundV2Payer(payer, lockedTotal - 1);
+        _fundV2Payer(payer, MIN_FUNDS_CDN - 1);
         uint256 dataSetId = mockPDPVerifier.nextDataSetId();
         uint256 pdpRailId = _railId(serviceProvider, address(mockUSDFC), FLAG_CALLBACK | uint64(dataSetId));
 
@@ -344,7 +347,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), 0);
         assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId, 0);
         assertFalse(RailIdLibrary.exists(_rail(pdpRailId)), "PDP rail rolled back");
-        assertEq(_usdfcBalance(), lockedTotal - 1);
+        assertEq(_usdfcBalance(), MIN_FUNDS_CDN - 1);
 
         _fundV2Payer(payer, MIN_FUNDS_CDN - _usdfcBalance());
         assertEq(_create(serviceProvider, _payload(3, true)), dataSetId);
@@ -362,8 +365,9 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
 
         uint256 pdpRailId = _railId(serviceProvider, address(0), FLAG_CALLBACK | uint64(dataSetId));
         assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId, pdpRailId);
-        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET);
-        assertEq(filecoinPayV2.balanceOf(payer, 0), 1 ether - LIFECYCLE_RESERVE_TARGET);
+        assertEq(_rail(pdpRailId).available, TERMINATE_FEE);
+        assertEq(filecoinPayV2.balanceOf(payer, 0), 1 ether - MIN_FUNDS);
+        assertEq(_payeeBalance(serviceProvider, address(0)), CREATE_DATA_SET_FEE);
         assertEq(_usdfcBalance(), 0);
     }
 
@@ -382,9 +386,11 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         uint256 pdpRailId = _railId(serviceProvider, address(token), FLAG_CALLBACK | uint64(dataSetId));
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pdpRailId, pdpRailId);
-        assertEq(info.lifecycleReserveBalance, 500_000);
-        assertEq(_rail(pdpRailId).available, 500_000);
-        assertEq(filecoinPayV2.balanceOf(payer, uint256(uint160(address(token)))), 120_000);
+        // 0.006 termination fee locked and 0.025 creation fee paid, in six decimals
+        assertEq(info.lifecycleReserveBalance, 6_000);
+        assertEq(_rail(pdpRailId).available, 6_000);
+        assertEq(filecoinPayV2.balanceOf(payer, uint256(uint160(address(token)))), 620_000 - 31_000);
+        assertEq(_payeeBalance(serviceProvider, address(token)), 25_000);
     }
 
     function testRevertsWhenDataSetIdReachesCdnNonceFlag() public {

@@ -9,10 +9,9 @@ import {FLAG_CALLBACK, RailId, RailIdLibrary, StreamState} from "@filecoin-pay-v
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
 import {
     CREATE_DATA_SET_FEE,
-    LIFECYCLE_RESERVE_TARGET,
-    REPLENISH_THRESHOLD,
     SCHEDULE_PIECE_REMOVALS_FEE,
-    STORAGE_PRICE_PER_TIB_PER_MONTH
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TERMINATE_FEE
 } from "../../src/lib/PriceListUSDFC.sol";
 import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
@@ -20,12 +19,6 @@ import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageS
 import {CreationSixDecimalToken} from "../StorageTermsCreation.t.sol";
 
 contract FWSSAuthorizationModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture {
-    // Removals that fit in the reserve left after the creation fee; the next one refills it.
-    uint256 private constant REMOVALS_BEFORE_REFILL =
-        (LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD - CREATE_DATA_SET_FEE) / SCHEDULE_PIECE_REMOVALS_FEE;
-    uint256 private constant PENDING_AT_REFILL =
-        CREATE_DATA_SET_FEE + (REMOVALS_BEFORE_REFILL + 1) * SCHEDULE_PIECE_REMOVALS_FEE;
-
     address private payer;
     bytes32 private v2Terms;
 
@@ -77,54 +70,51 @@ contract FWSSAuthorizationModuleFilecoinPayV2Test is FilecoinWarmStorageServiceF
         return RailIdLibrary.getRail(IExtsload(address(filecoinPayV2)), RailId.wrap(railId));
     }
 
-    function _balance(address token) private view returns (uint256) {
-        return filecoinPayV2.balanceOf(payer, uint256(uint160(token)));
+    function _balance(address account, address token) private view returns (uint256) {
+        return filecoinPayV2.balanceOf(account, uint256(uint160(token)));
     }
 
-    function testRemovalAboveThresholdOnlyAddsFee() public {
+    function testRemovalPaysFeeToPayeeAtOnce() public {
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = _create(v2Terms, false);
         uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
-        uint256 balanceBefore = _balance(address(mockUSDFC));
+        uint256 payerBefore = _balance(payer, address(mockUSDFC));
+        uint256 payeeBefore = _balance(serviceProvider, address(mockUSDFC));
 
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL);
-
-        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
-        assertEq(
-            info.pendingOneTimePayments, CREATE_DATA_SET_FEE + REMOVALS_BEFORE_REFILL * SCHEDULE_PIECE_REMOVALS_FEE
-        );
-        assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET, "reserve unchanged");
-        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET, "nothing locked");
-        assertEq(_balance(address(mockUSDFC)), balanceBefore, "payer balance unchanged");
-    }
-
-    function testRemovalRefillsReserveWithLockOnPdpRail() public {
-        _fundV2Payer(payer, 10e18);
-        uint256 dataSetId = _create(v2Terms, false);
-        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL);
-        uint256 balanceBefore = _balance(address(mockUSDFC));
-
-        // The refill runs with no permissions: lock needs no grant from the payer
+        // The charge runs with no permissions: lock and disburse need no grant from the payer
         vm.expectCall(
             address(filecoinPayV2),
             abi.encodePacked(bytes4(keccak256("executeScript(uint256,bytes)")), abi.encode(uint256(0)))
         );
         _scheduleRemovals(dataSetId, 1);
 
-        uint256 refilled = LIFECYCLE_RESERVE_TARGET + PENDING_AT_REFILL;
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, PENDING_AT_REFILL);
-        assertEq(info.lifecycleReserveBalance, refilled, "reserve refilled to target plus pending");
-        assertEq(_rail(pdpRailId).available, refilled, "rail holds the refilled reserve");
-        assertEq(balanceBefore - _balance(address(mockUSDFC)), refilled - LIFECYCLE_RESERVE_TARGET, "lock pays delta");
+        assertEq(info.pendingOneTimePayments, 0, "no fee waits");
+        assertEq(info.lifecycleReserveBalance, TERMINATE_FEE, "reserve unchanged");
+        assertEq(_rail(pdpRailId).available, TERMINATE_FEE, "rail keeps only the termination fee");
+        assertEq(payerBefore - _balance(payer, address(mockUSDFC)), SCHEDULE_PIECE_REMOVALS_FEE, "payer pays the fee");
+        assertEq(_balance(serviceProvider, address(mockUSDFC)) - payeeBefore, SCHEDULE_PIECE_REMOVALS_FEE, "payee paid");
     }
 
-    function testRemovalRefillAddsToSettledBalance() public {
+    function testManyRemovalsNeverTouchTheReserve() public {
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = _create(v2Terms, false);
         uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL);
+
+        // Under FilecoinPayV1 the 65th removal would refill the reserve
+        _scheduleRemovals(dataSetId, 70);
+
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, 0);
+        assertEq(info.lifecycleReserveBalance, TERMINATE_FEE);
+        assertEq(_rail(pdpRailId).available, TERMINATE_FEE);
+        assertEq(_balance(serviceProvider, address(mockUSDFC)), CREATE_DATA_SET_FEE + 70 * SCHEDULE_PIECE_REMOVALS_FEE);
+    }
+
+    function testRemovalKeepsHeldPayment() public {
+        _fundV2Payer(payer, 10e18);
+        uint256 dataSetId = _create(v2Terms, false);
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
 
         // Payment held by the settlement callback sits in the same available balance as the reserve
         uint256 held = 3e18;
@@ -135,13 +125,12 @@ contract FWSSAuthorizationModuleFilecoinPayV2Test is FilecoinWarmStorageServiceF
 
         _scheduleRemovals(dataSetId, 1);
 
-        assertEq(_rail(pdpRailId).available, held + LIFECYCLE_RESERVE_TARGET + PENDING_AT_REFILL, "held payment kept");
+        assertEq(_rail(pdpRailId).available, TERMINATE_FEE + held, "held payment kept");
     }
 
-    function testRemovalRevertsWhenPayerCannotRefill() public {
-        _fundV2Payer(payer, LIFECYCLE_RESERVE_TARGET);
+    function testRemovalRevertsWhenPayerCannotPay() public {
+        _fundV2Payer(payer, TERMINATE_FEE + CREATE_DATA_SET_FEE);
         uint256 dataSetId = _create(v2Terms, false);
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL);
 
         uint256[] memory pieceIds = new uint256[](1);
         makeSignaturePass(payer);
@@ -151,21 +140,22 @@ contract FWSSAuthorizationModuleFilecoinPayV2Test is FilecoinWarmStorageServiceF
         );
     }
 
-    function testRemovalRefillLocksOnlyPdpRailWithCDN() public {
+    function testRemovalChargesOnlyPdpRailWithCDN() public {
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = _create(v2Terms, true);
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 cacheMissBefore = _rail(info.cacheMissRailId).available;
         uint256 cdnBefore = _rail(info.cdnRailId).available;
 
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL + 1);
+        _scheduleRemovals(dataSetId, 1);
 
-        assertEq(_rail(info.pdpRailId).available, LIFECYCLE_RESERVE_TARGET + PENDING_AT_REFILL);
+        assertEq(_rail(info.pdpRailId).available, TERMINATE_FEE);
         assertEq(_rail(info.cacheMissRailId).available, cacheMissBefore, "cache-miss rail untouched");
         assertEq(_rail(info.cdnRailId).available, cdnBefore, "CDN rail untouched");
+        assertEq(_balance(serviceProvider, address(mockUSDFC)), CREATE_DATA_SET_FEE + SCHEDULE_PIECE_REMOVALS_FEE);
     }
 
-    function testRemovalRefillScalesToSixDecimalTerms() public {
+    function testRemovalFeeScalesToSixDecimalTerms() public {
         CreationSixDecimalToken token = new CreationSixDecimalToken();
         bytes32 termsId = _registerV2Terms(address(token), 6, 2_500_000);
         require(token.transfer(payer, 10e6));
@@ -176,12 +166,13 @@ contract FWSSAuthorizationModuleFilecoinPayV2Test is FilecoinWarmStorageServiceF
         vm.stopPrank();
         uint256 dataSetId = _create(termsId, false);
 
-        _scheduleRemovals(dataSetId, REMOVALS_BEFORE_REFILL + 1);
+        _scheduleRemovals(dataSetId, 1);
 
-        // 0.50 target + 0.48 pending, in six decimals
+        // 0.006 termination fee locked, 0.025 creation and 0.007 removal fees paid, in six decimals
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
-        assertEq(info.lifecycleReserveBalance, 980_000);
-        assertEq(_rail(info.pdpRailId).available, 980_000);
-        assertEq(_balance(address(token)), 10e6 - 980_000);
+        assertEq(info.lifecycleReserveBalance, 6_000);
+        assertEq(_rail(info.pdpRailId).available, 6_000);
+        assertEq(_balance(payer, address(token)), 10e6 - 6_000 - 25_000 - 7_000);
+        assertEq(_balance(serviceProvider, address(token)), 25_000 + 7_000);
     }
 }

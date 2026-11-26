@@ -223,26 +223,25 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
         // Verify the signature
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
-        uint8 tokenDecimals = _tokenDecimals(info);
-        uint96 newPending = _addPendingFee(
-            info.pendingOneTimePayments, StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, tokenDecimals)
-        );
-        uint96 reserveBalance = info.lifecycleReserveBalance;
         if (_isV1Rail(info.pdpRailId)) {
-            info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
-                info.pdpRailId, info.pdpEndEpoch, reserveBalance, newPending, tokenDecimals
+            uint96 newPending = _addPendingFee(
+                info.pendingOneTimePayments,
+                StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, _tokenDecimals(info))
             );
+            info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
+                info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, _tokenDecimals(info)
+            );
+            info.pendingOneTimePayments = newPending;
         } else {
-            uint96 replenished =
-                LibRails.replenishedReserve(info.pdpEndEpoch, reserveBalance, newPending, tokenDecimals);
-            if (replenished != reserveBalance) {
-                // The PDP rail's available balance also holds settled payment, so add the shortfall, never set it.
-                address token = LibStorageTerms.getRecord(info.storageTermsId).token;
-                filecoinPayV2.lockOnPdpRail(dataSetId, token, payer, info.payee, replenished - reserveBalance);
-                info.lifecycleReserveBalance = replenished;
-            }
+            // FilecoinPayV2 lets FWSS take the fee from the payer's balance now, so it never waits in the reserve.
+            filecoinPayV2.chargeOnPdpRail(
+                dataSetId,
+                LibStorageTerms.getRecord(info.storageTermsId).token,
+                payer,
+                info.payee,
+                StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, _tokenDecimals(info))
+            );
         }
-        info.pendingOneTimePayments = newPending;
 
         // piecesAdded may flush the fee before PDPVerifier drops these pieces, so pending alone cannot signal the
         // smaller leaf count to nextProvingPeriod. An empty batch removes nothing.

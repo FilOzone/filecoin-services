@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Storage terms gain a `payVersion` field: `0` is FilecoinPayV1, `1` is FilecoinPayV2.
   A data set created with FilecoinPayV2 terms opens its rails on FilecoinPayV2 in one script, with FWSS as the operator.
   The payer deposits the selected currency into FilecoinPayV2 and authorizes FWSS with `CREATE_RAIL`.
-  FWSS locks the lifecycle reserve and the CDN lockups on the new rails, and FilecoinPayV2 reverts the script when the balance is short.
+  In the same script FWSS locks the terminate fee and the CDN lockups on the new rails and pays the creation fee to the payee, and FilecoinPayV2 reverts the script when the balance is short.
   The stored rail IDs are FilecoinPayV2 rail hashes.
   Record zero and terms registered before the field existed read `0`, so their data sets stay on FilecoinPayV1 as before.
   The other data set callbacks still act on FilecoinPayV1 rails, so FilecoinPayV2 data sets do not yet work end to end.
@@ -21,9 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **Breaking ABI:** `StorageTerms` appends `uint8 payVersion`, which changes the selectors of `registerStorageTerms` and `getStorageTermsId`, the return data of `getStorageTerms`, and the `StorageTermsRegistered` event.
   Terms IDs now hash under `filecoin.FWSS.StorageTerms.v2` with `payVersion` appended, so `getStorageTermsId` no longer returns the 1.6.0 ID of a definition.
   Records registered under 1.6.0 keep their IDs; record zero is unaffected.
-- Scheduling piece removals on a FilecoinPayV2 data set refills the lifecycle reserve with a lock on its PDP rail, under the same threshold as FilecoinPayV1.
-  The lock adds only the shortfall, so payment the rail already holds stays.
-  A payer balance short of the refill reverts with FilecoinPayV2 `InsufficientBalance`.
+- FilecoinPayV2 data sets keep no lifecycle reserve to refill: FWSS pays each one-time fee to the payee when it arises.
+  Their PDP rail keeps only the scaled terminate fee locked, which `lifecycleReserveBalance` reports, and `pendingOneTimePayments` stays zero.
+  Scheduling piece removals pays its fee with a lock and a disburse on the PDP rail, so payment the rail already holds stays.
+  A payer balance short of a fee reverts with FilecoinPayV2 `InsufficientBalance`.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 

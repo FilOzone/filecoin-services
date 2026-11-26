@@ -8,9 +8,10 @@ import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {CDNPaymentRailsToppedUp} from "./LibRails.sol";
 import {StoragePricing} from "./StoragePricing.sol";
 import {
+    CREATE_DATA_SET_FEE,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
-    LIFECYCLE_RESERVE_TARGET
+    TERMINATE_FEE
 } from "./PriceListUSDFC.sol";
 
 /// @title LibRailsV2
@@ -23,7 +24,8 @@ library LibRailsV2 {
 
     error DataSetIdTooLarge(uint256 dataSetId);
 
-    /// @notice Opens the data set's rails on FilecoinPayV2 in one script, with this contract as their operator.
+    /// @notice Opens the data set's rails on FilecoinPayV2 in one script, with this contract as their operator,
+    /// and pays the creation fee to the payee.
     /// @param payments The FilecoinPayV2 contract instance
     /// @param dataSetId The data set the rail nonces derive from
     /// @param token The currency selected by the data set's storage terms; address(0) is native FIL
@@ -49,8 +51,10 @@ library LibRailsV2 {
         uint64 pdpNonce = pdpRailNonce(dataSetId);
         uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | cacheMissNonce;
 
-        // The lifecycle reserve is a lock on the PDP rail. A payer balance short of the locks reverts in executeScript.
-        uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
+        // The PDP rail keeps only the termination fee locked, the one fee that may come due when the payer has nothing
+        // left. The creation fee passes through the rail to the payee. A short payer balance reverts in executeScript.
+        uint256 createFee = StoragePricing.scaleAmount(CREATE_DATA_SET_FEE, tokenDecimals);
+        uint256 terminateFee = StoragePricing.scaleAmount(TERMINATE_FEE, tokenDecimals);
         uint256 cacheMissLockup;
         uint256 cdnLockup;
         if (hasCDN) {
@@ -59,8 +63,8 @@ library LibRailsV2 {
         }
 
         // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
-        ScriptBuilder script =
-            newScript().setToken(token).createRail(payer, payee, pdpNonce).lock(uint128(lifecycleReserve));
+        ScriptBuilder script = newScript().setToken(token).createRail(payer, payee, pdpNonce)
+            .lock(uint128(terminateFee + createFee)).disburse(uint128(createFee));
         if (hasCDN) {
             script = script.createRail(payer, payee, cacheMissNonce).lock(uint128(cacheMissLockup))
                 .createRail(payer, filBeamBeneficiaryAddress, cdnNonce).lock(uint128(cdnLockup));
@@ -82,26 +86,28 @@ library LibRailsV2 {
         return FLAG_CALLBACK | uint64(dataSetId);
     }
 
-    /// @notice Moves part of the payer's FilecoinPayV2 balance into a data set's PDP rail
-    /// @dev Lock and setRail need no grant from the payer, so the script runs with no permissions.
+    /// @notice Pays a one-time fee from the payer's FilecoinPayV2 balance to the payee through the data set's PDP rail
+    /// @dev Lock, disburse and setRail need no grant from the payer, so the script runs with no permissions. The lock
+    /// and the disburse cancel out, so the rail's available balance, and the payment it holds, stay as they were.
     /// @param payments The FilecoinPayV2 contract instance
     /// @param dataSetId The data set the PDP rail pays for
     /// @param token The rail's currency; address(0) is native FIL
     /// @param payer The rail's payer
     /// @param payee The rail's recipient
-    /// @param amount The amount to add to the rail's available balance
-    function lockOnPdpRail(
+    /// @param fee The amount to pay
+    function chargeOnPdpRail(
         FilecoinPayV2 payments,
         uint256 dataSetId,
         address token,
         address payer,
         address payee,
-        uint256 amount
+        uint256 fee
     ) internal {
         uint64 nonce = pdpRailNonce(dataSetId);
         // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
         payments.executeScript(
-            NONE, newScript().setToken(token).setRail(payer, payee, nonce).lock(uint128(amount)).build()
+            NONE,
+            newScript().setToken(token).setRail(payer, payee, nonce).lock(uint128(fee)).disburse(uint128(fee)).build()
         );
     }
 
