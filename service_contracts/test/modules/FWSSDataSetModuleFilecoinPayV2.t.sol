@@ -2,11 +2,12 @@
 pragma solidity 0.8.37;
 
 import {Vm} from "forge-std/Test.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
-import {CREATE_RAIL, DEPOSIT} from "@filecoin-pay-v2/lib/Permissions.sol";
+import {CREATE_RAIL, DEPOSIT, NONE} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream, StreamState} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
@@ -22,6 +23,7 @@ import {
 } from "../../src/lib/PriceListUSDFC.sol";
 import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
+import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
 import {PDPOffering} from "../PDPOffering.sol";
@@ -414,5 +416,81 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = _create(serviceProvider, _payload(0, false));
         assertFalse(harness.isV1Rail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId));
+    }
+
+    function _createCdnDataSet() private returns (uint256 dataSetId, DataSetInfoView memory info) {
+        _fundV2Payer(payer, 10e18);
+        dataSetId = _create(serviceProvider, _payload(0, true));
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
+    }
+
+    function _usdfcBalanceOf(address owner) private view returns (uint256) {
+        return filecoinPayV2.balanceOf(owner, uint256(uint160(address(mockUSDFC))));
+    }
+
+    function _settleFilBeam(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount) private {
+        vm.prank(filBeamController);
+        FWSSFilBeamModule(address(pdpServiceWithPayments))
+            .settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamDisbursesBothRailsOnFilecoinPayV2() public {
+        (uint256 dataSetId, DataSetInfoView memory info) = _createCdnDataSet();
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+        uint256 payerBalanceBefore = _usdfcBalance();
+        uint256 beneficiaryBalanceBefore = _usdfcBalanceOf(filBeamBeneficiary);
+        uint256 payeeBalanceBefore = _usdfcBalanceOf(serviceProvider);
+
+        vm.expectCall(
+            address(filecoinPayV2),
+            abi.encodePacked(bytes4(keccak256("executeScript(uint256,bytes)")), abi.encode(NONE))
+        );
+        _settleFilBeam(dataSetId, cdnAmount, cacheMissAmount);
+
+        assertEq(_rail(info.cdnRailId).available, DEFAULT_CDN_LOCKUP_AMOUNT - cdnAmount);
+        assertEq(_rail(info.cacheMissRailId).available, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT - cacheMissAmount);
+        assertEq(_usdfcBalanceOf(filBeamBeneficiary), beneficiaryBalanceBefore + cdnAmount);
+        assertEq(_usdfcBalanceOf(serviceProvider), payeeBalanceBefore + cacheMissAmount);
+        assertEq(_usdfcBalance(), payerBalanceBefore, "paid from the rails' locks, not the payer's balance");
+    }
+
+    function testSettleFilBeamDisbursesOnlyCdnRailOnFilecoinPayV2() public {
+        (uint256 dataSetId, DataSetInfoView memory info) = _createCdnDataSet();
+        uint256 cdnAmount = 75000;
+
+        _settleFilBeam(dataSetId, cdnAmount, 0);
+
+        assertEq(_rail(info.cdnRailId).available, DEFAULT_CDN_LOCKUP_AMOUNT - cdnAmount);
+        assertEq(_rail(info.cacheMissRailId).available, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+    }
+
+    function testSettleFilBeamDisbursesOnlyCacheMissRailOnFilecoinPayV2() public {
+        (uint256 dataSetId, DataSetInfoView memory info) = _createCdnDataSet();
+        uint256 cacheMissAmount = 30000;
+
+        _settleFilBeam(dataSetId, 0, cacheMissAmount);
+
+        assertEq(_rail(info.cdnRailId).available, DEFAULT_CDN_LOCKUP_AMOUNT);
+        assertEq(_rail(info.cacheMissRailId).available, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT - cacheMissAmount);
+    }
+
+    function testSettleFilBeamSkipsFilecoinPayV2ForZeroAmounts() public {
+        (uint256 dataSetId,) = _createCdnDataSet();
+
+        vm.expectCall(address(filecoinPayV2), abi.encodePacked(bytes4(keccak256("executeScript(uint256,bytes)"))), 0);
+        _settleFilBeam(dataSetId, 0, 0);
+    }
+
+    function testSettleFilBeamRevertsAboveFilecoinPayV2Lock() public {
+        (uint256 dataSetId, DataSetInfoView memory info) = _createCdnDataSet();
+
+        // TODO: expect FilecoinPayV2's named error once DISBURSE defines one instead of underflowing
+        vm.expectRevert(stdError.arithmeticError);
+        _settleFilBeam(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT + 1, 0);
+
+        _settleFilBeam(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+        assertEq(_rail(info.cdnRailId).available, 0);
+        assertEq(_rail(info.cacheMissRailId).available, 0);
     }
 }
