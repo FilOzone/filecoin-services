@@ -2,7 +2,7 @@
 pragma solidity 0.8.37;
 
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
-import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
+import {CREATE_RAIL, NONE} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {CDNPaymentRailsToppedUp} from "./LibRails.sol";
@@ -73,6 +73,43 @@ library LibRailsV2 {
             cdnRailId = railId(payer, filBeamBeneficiaryAddress, token, cdnNonce);
             emit CDNPaymentRailsToppedUp(dataSetId, cdnLockup, cdnLockup, cacheMissLockup, cacheMissLockup);
         }
+    }
+
+    /// @notice Pays FilBeam usage out of the data set's CDN rails in one script, mirroring FilecoinPayV1's
+    ///         one-time payments: each amount leaves the rail's locked balance for its recipient.
+    /// @param payments The FilecoinPayV2 contract instance
+    /// @param dataSetId The data set the rail nonces derive from
+    /// @param token The rails' currency; address(0) is native FIL
+    /// @param payer The rails' payer
+    /// @param payee The cache-miss rail's recipient, the service provider's payee
+    /// @param filBeamBeneficiaryAddress The CDN rail's recipient
+    /// @param cdnAmount Amount to pay out of the CDN rail
+    /// @param cacheMissAmount Amount to pay out of the cache-miss rail
+    function settleCDNRails(
+        FilecoinPayV2 payments,
+        uint256 dataSetId,
+        address token,
+        address payer,
+        address payee,
+        address filBeamBeneficiaryAddress,
+        uint256 cdnAmount,
+        uint256 cacheMissAmount
+    ) internal {
+        if (cdnAmount == 0 && cacheMissAmount == 0) {
+            return;
+        }
+        ScriptBuilder script = newScript().setToken(token);
+        if (cdnAmount > 0) {
+            uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | uint64(dataSetId);
+            uint128 cdnAmountToDisburse = uint128(cdnAmount);
+            script = script.setRail(payer, filBeamBeneficiaryAddress, cdnNonce).disburse(cdnAmountToDisburse);
+        }
+        if (cacheMissAmount > 0) {
+            uint64 cacheMissNonce = uint64(dataSetId);
+            uint128 cacheMissAmountToDisburse = uint128(cacheMissAmount);
+            script = script.setRail(payer, payee, cacheMissNonce).disburse(cacheMissAmountToDisburse);
+        }
+        payments.executeScript(NONE, script.build());
     }
 
     /// @notice Derives the id of a rail this contract operates

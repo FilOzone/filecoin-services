@@ -2,9 +2,13 @@
 pragma solidity 0.8.37;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {Errors} from "../Errors.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibRails} from "../lib/LibRails.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
+import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTermsRecord} from "../lib/StorageTerms.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 
@@ -12,17 +16,23 @@ import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 /// @notice Manages FWSS CDN payment rails and the FilBeam controller.
 contract FWSSFilBeamModule is FWSSStorage, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
+    using LibRailsV2 for FilecoinPayV2;
 
     FilecoinPayV1 internal immutable paymentContract;
+
+    address internal immutable filBeamBeneficiaryAddress;
 
     /// @notice Configures the immutable dependencies used by this module.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
     /// @param _filecoinPayV2Address The FilecoinPayV2 contract that FWSS rails move to.
-    constructor(address _paymentsContractAddress, address _filecoinPayV2Address)
+    /// @param _filBeamBeneficiaryAddress The beneficiary of FilBeam payment rails.
+    constructor(address _paymentsContractAddress, address _filecoinPayV2Address, address _filBeamBeneficiaryAddress)
         FWSSFilecoinPayV2(_filecoinPayV2Address)
     {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
+        filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
     }
 
     event FilBeamControllerChanged(address oldController, address newController);
@@ -61,7 +71,14 @@ contract FWSSFilBeamModule is FWSSStorage, FWSSFilecoinPayV2 {
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        paymentContract.settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
+        StorageTermsRecord storage terms = LibStorageTerms.getRecord(info.storageTermsId);
+        if (terms.payVersion == PAY_VERSION_FILECOIN_PAY_V2) {
+            filecoinPayV2.settleCDNRails(
+                dataSetId, terms.token, info.payer, info.payee, filBeamBeneficiaryAddress, cdnAmount, cacheMissAmount
+            );
+        } else {
+            paymentContract.settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
+        }
     }
 
     /**
