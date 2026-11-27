@@ -167,8 +167,9 @@ A client opts a new dataset into FilecoinPayV2 by signing the ID of terms regist
 On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and in one `executeScript` call FWSS opens the rails, locks the terminate fee and the CDN lockups, and pays the creation fee to the payee.
 Scheduling piece removals on FilecoinPayV2 pays its fee to the payee at once, with a lock and a disburse on the PDP rail.
 Adding pieces on FilecoinPayV2 sets the PDP rail's rate, moves the rate's lockup on the rail, and pays the add fee to the payee, in one script.
+After piece removals, `nextProvingPeriod` on FilecoinPayV2 sets the PDP rail's rate for the remaining leaf count and unlocks the lockup difference, in one script with no fee.
 That grant has no rate or lockup allowance like the FilecoinPayV1 operator approval, so only FWSS's own logic bounds what it locks and charges on those rails.
-The rest of this specification after creation still describes FilecoinPayV1 rails; FilecoinPayV2 data sets do not yet support the rate update in `nextProvingPeriod`, termination or the CDN flows.
+The rest of this specification after creation still describes FilecoinPayV1 rails; FilecoinPayV2 data sets do not yet support termination or the CDN flows.
 Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.

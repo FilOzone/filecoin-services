@@ -4,6 +4,7 @@ pragma solidity 0.8.37;
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
 import {IRailV2} from "@filecoin-pay-v2/interfaces/IRail.sol";
 import {RailId, RailIdLibrary} from "@filecoin-pay-v2/lib/RailId.sol";
@@ -15,6 +16,7 @@ import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
+import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
@@ -22,6 +24,8 @@ import {FWSSStorage} from "../storage/FWSSStorage.sol";
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
 contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWSSPDPVerifier, FWSSFilecoinPayV2 {
+    using LibRailsV2 for FilecoinPayV2;
+
     FilecoinPayV1 internal immutable paymentContract;
 
     /// @notice Configures the immutable dependencies used by this module.
@@ -124,8 +128,6 @@ contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWS
         LibServiceLifecycleGuards.requirePaymentNotBeyondEndEpoch(dataSetId, dataSetInfo[dataSetId].pdpEndEpoch);
 
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        uint96 pending = info.pendingOneTimePayments;
-        uint96 reserveBalance = info.lifecycleReserveBalance;
 
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
@@ -155,18 +157,7 @@ contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWS
             }
             provingDeadlines[dataSetId] = firstDeadline;
 
-            // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
-            if (_consumePieceRemovals(dataSetId, info) || pending > 0) {
-                LibStoragePayments.updatePaymentRates(
-                    dataSetId,
-                    info,
-                    StoragePricing.calculateStorageRate(leafCount, info.storageTermsId),
-                    pending,
-                    reserveBalance,
-                    false,
-                    paymentContract
-                );
-            }
+            _updateRateAfterRemovals(dataSetId, info, leafCount);
 
             return;
         }
@@ -212,17 +203,49 @@ contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWS
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
+        _updateRateAfterRemovals(dataSetId, info, leafCount);
+    }
+
+    /// @notice Sets the PDP rail rate for the leaf count left after piece removals, and on FilecoinPayV1 flushes the
+    /// pending one-time fees. Additions already set the rate in piecesAdded.
+    /// @param dataSetId The data set advancing to its next proving period.
+    /// @param info The data set's stored info.
+    /// @param leafCount The data set's leaf count after PDPVerifier dropped the removed pieces.
+    function _updateRateAfterRemovals(uint256 dataSetId, DataSetInfo storage info, uint256 leafCount) private {
         bool hadRemovals = _consumePieceRemovals(dataSetId, info);
-        if (hadRemovals || pending > 0) {
+
+        if (_isV1Rail(info.pdpRailId)) {
+            uint96 pending = info.pendingOneTimePayments;
+            if (!hadRemovals && pending == 0) return;
             LibStoragePayments.updatePaymentRates(
                 dataSetId,
                 info,
                 StoragePricing.calculateStorageRate(leafCount, info.storageTermsId),
                 pending,
-                reserveBalance,
+                info.lifecycleReserveBalance,
                 false,
                 paymentContract
+            );
+        } else if (hadRemovals) {
+            // FilecoinPayV2 data sets pay their fees as they arise, so only removals leave the rate to update.
+            uint256 newRate = StoragePricing.calculateStorageRate(leafCount, info.storageTermsId);
+
+            // The rate may already be right, set by a later piecesAdded or kept by rounding. setRate settles first and
+            // reverts for a payer who is behind, which an unchanged rate must not do, as on FilecoinPayV1.
+            uint256 pdpRailId = info.pdpRailId;
+            if (
+                newRate == RailIdLibrary.getRail(IExtsload(address(filecoinPayV2)), RailId.wrap(pdpRailId)).incomingRate
+            ) {
+                return;
+            }
+            filecoinPayV2.setPdpRate(
+                dataSetId,
+                pdpRailId,
+                LibStorageTerms.getRecord(info.storageTermsId).token,
+                info.payer,
+                info.payee,
+                newRate,
+                0
             );
         }
     }

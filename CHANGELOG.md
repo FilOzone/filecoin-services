@@ -31,6 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   A payer short of the lock or the fee reverts with FilecoinPayV2 `InsufficientBalance`, and a payer whose balance has run out reverts with `Behind`.
   A rate above FilecoinPayV2's `uint88` reverts with the new `RateTooLarge` error.
   The `settleRail` callback counts neither the reserve nor that lock as held payment.
+- After piece removals, `nextProvingPeriod` on a FilecoinPayV2 data set sets its PDP rail rate on FilecoinPayV2 for the remaining leaf count and unlocks the lock difference, instead of calling FilecoinPayV1 and reverting.
+  The rate change settles the rail first, so the `settleRail` callback arbitrates the epochs since the last settlement at the old rate.
+  When the rail already has that rate, set by a later `piecesAdded` or kept by rounding, `nextProvingPeriod` leaves the rail alone, so a payer who is behind does not block proving.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
