@@ -5,6 +5,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.7.0] - SP Payee and Worker Rotation
+
+This contract-stack release lets a storage provider rotate its worker and payee wallets without moving its data sets. It upgrades ServiceProviderRegistry and PDPVerifier alongside FilecoinWarmStorageService (FWSS); the proxy addresses do not change. Upgrade the contracts in this order on each network: ServiceProviderRegistry, then PDPVerifier, then FWSS.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.7.0` | Routine |
+| `FilecoinWarmStorageService` | `1.7.0` | Josuke migration |
+| `ServiceProviderRegistry` | `1.3.0` | UUPS upgrade |
+| `PDPVerifier` | `3.6.0` | UUPS upgrade ([FilOzone/pdp v3.6.0](https://github.com/FilOzone/pdp/releases/tag/v3.6.0)) |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.7.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.7.0). The proxy addresses remain unchanged.
+
+### Added
+
+- `ServiceProviderRegistry.changeServiceProvider(providerId, newServiceProvider)` rotates a provider's worker. The current payee or the registry owner can call it; the worker cannot rotate itself. Former workers stay mapped to the provider ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- `ServiceProviderRegistry.changePayee(providerId, newPayee)` lets the registry owner change a provider's payee as a vetted recovery path ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- `ServiceProviderRegistry.isAuthorizedWorker(registrationAddress, attemptedAddress)` resolves the current worker for the provider address recorded on a data set, including a former worker. PDPVerifier and FWSS use it for storage-provider authorization. Also adds `getProviderIdByWorkerAddress`, the `PayeeChanged` and `ServiceProviderChanged` events, and `providerActionNonce` ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- `retargetDataSetPayee(dataSetId)` on FWSS moves a live data set's PDP and cache-miss rails to the registry's current payee. The current worker calls it after `changePayee`. The old rails are zeroed, not terminated, and replacements with the same rate and lockup are opened; the CDN rail is unchanged. Emits `DataSetPayeeRetargeted` ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+
+### Changed
+
+- FWSS authorizes storage-provider calls on existing data sets through `isAuthorizedWorker`, so the provider's current worker can act on data sets created under a previous worker. Creating a data set requires the current worker ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- `FWSSAuthorizationModule` takes the ServiceProviderRegistry address as a constructor argument ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- Removing a provider registration now requires the payee: `removeProvider()` checks that the caller is the payee, and `removeProvider(providerId, signature)` lets the payee remove it with an optional EIP-712 signature. An address left mapped to an inactive provider can register again ([#674](https://github.com/FilOzone/filecoin-services/pull/674)).
+- `lib/pdp` moves to PDPVerifier 3.6.0, which authorizes storage-provider calls through the registry, enforces FRC-0069 PieceCIDv2 sizing in `addPieces()`, and removes the 2,000-piece pending-removal limit and its `MAX_ENQUEUED_REMOVALS()` getter ([FilOzone/pdp v3.6.0](https://github.com/FilOzone/pdp/releases/tag/v3.6.0)).
+
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
 This contract-stack release adds owner-registered storage terms to FilecoinWarmStorageService (FWSS), so each data set selects an immutable currency and price at creation, and takes legacy piece metadata cleanup out of the proving path. It is the first upgrade delivered as a josuke migration on the ERC-8167 dispatcher. The FWSS proxy addresses do not change.
