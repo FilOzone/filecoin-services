@@ -2,15 +2,17 @@
 pragma solidity 0.8.37;
 
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
+import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
 import {CREATE_RAIL, NONE} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
-import {CDNPaymentRailsToppedUp} from "./LibRails.sol";
+import {CDNPaymentRailsToppedUp, RailRateUpdated} from "./LibRails.sol";
 import {StoragePricing} from "./StoragePricing.sol";
 import {
     CREATE_DATA_SET_FEE,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
+    DEFAULT_LOCKUP_PERIOD,
     TERMINATE_FEE
 } from "./PriceListUSDFC.sol";
 
@@ -23,6 +25,7 @@ library LibRailsV2 {
     uint64 internal constant CDN_RAIL_NONCE_FLAG = 1 << 62;
 
     error DataSetIdTooLarge(uint256 dataSetId);
+    error RateTooLarge(uint256 rate);
 
     /// @notice Opens the data set's rails on FilecoinPayV2 in one script, with this contract as their operator,
     /// and pays the creation fee to the payee.
@@ -109,6 +112,59 @@ library LibRailsV2 {
             NONE,
             newScript().setToken(token).setRail(payer, payee, nonce).lock(uint128(fee)).disburse(uint128(fee)).build()
         );
+    }
+
+    /// @notice Sets a data set's PDP rail rate, moves the rate lockup with it, and pays a one-time fee to the payee
+    /// @dev Lock, unlock, disburse, setRate and setRail need no grant from the payer, so the script runs with no
+    /// permissions. setRate goes first: it settles the rail, and the settleRail callback sizes the held payment by the
+    /// old rate's lockup.
+    /// @param payments The FilecoinPayV2 contract instance
+    /// @param dataSetId The data set the PDP rail pays for
+    /// @param pdpRailId The data set's PDP rail
+    /// @param token The rail's currency; address(0) is native FIL
+    /// @param payer The rail's payer
+    /// @param payee The rail's recipient
+    /// @param newRate The rail's new rate per epoch
+    /// @param fee The one-time fee to pay
+    function setPdpRate(
+        FilecoinPayV2 payments,
+        uint256 dataSetId,
+        uint256 pdpRailId,
+        address token,
+        address payer,
+        address payee,
+        uint256 newRate,
+        uint256 fee
+    ) internal {
+        require(newRate <= type(uint88).max, RateTooLarge(newRate));
+        uint256 oldLockup =
+            rateLockup(RailIdLibrary.getRail(IExtsload(address(payments)), RailId.wrap(pdpRailId)).incomingRate);
+        uint256 newLockup = rateLockup(newRate);
+        uint256 lockAmount = fee;
+        uint256 unlockAmount;
+        if (newLockup > oldLockup) {
+            lockAmount += newLockup - oldLockup;
+        } else {
+            unlockAmount = oldLockup - newLockup;
+        }
+        uint64 nonce = pdpRailNonce(dataSetId);
+
+        // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
+        ScriptBuilder script = newScript().setToken(token).setRail(payer, payee, nonce).setRate(uint88(newRate));
+        if (unlockAmount != 0) script = script.unlock(uint128(unlockAmount));
+        if (lockAmount != 0) script = script.lock(uint128(lockAmount));
+        if (fee != 0) script = script.disburse(uint128(fee));
+        payments.executeScript(NONE, script.build());
+
+        emit RailRateUpdated(dataSetId, pdpRailId, newRate);
+    }
+
+    /// @notice The lock that backs a PDP rail's rate: DEFAULT_LOCKUP_PERIOD epochs of payment, as FilecoinPayV1 keeps
+    /// @dev Nothing stores the lock, so changing DEFAULT_LOCKUP_PERIOD needs a migration of the locks on live rails.
+    /// @param rate The rail's rate per epoch
+    /// @return The amount locked on the rail for the rate
+    function rateLockup(uint256 rate) internal pure returns (uint256) {
+        return rate * DEFAULT_LOCKUP_PERIOD;
     }
 
     /// @notice Derives the id of a rail this contract operates

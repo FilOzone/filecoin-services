@@ -25,6 +25,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   Their PDP rail keeps only the scaled terminate fee locked, which `lifecycleReserveBalance` reports, and `pendingOneTimePayments` stays zero.
   Scheduling piece removals pays its fee with a lock and a disburse on the PDP rail, so payment the rail already holds stays.
   A payer balance short of a fee reverts with FilecoinPayV2 `InsufficientBalance`.
+- Adding pieces to a FilecoinPayV2 data set sets its PDP rail rate in one script with no permissions, as FilecoinPayV1 rails do.
+  The script locks a month of the rate (`rate × DEFAULT_LOCKUP_PERIOD`) on the PDP rail, moves that lock when the rate changes, and pays the add fee to the payee.
+  A rate that drops after processed deletions unlocks the difference.
+  A payer short of the lock or the fee reverts with FilecoinPayV2 `InsufficientBalance`, and a payer whose balance has run out reverts with `Behind`.
+  A rate above FilecoinPayV2's `uint88` reverts with the new `RateTooLarge` error.
+  The `settleRail` callback counts neither the reserve nor that lock as held payment.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 

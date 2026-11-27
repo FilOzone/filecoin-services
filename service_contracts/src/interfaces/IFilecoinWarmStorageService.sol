@@ -13,6 +13,7 @@ import {PriceList} from "../lib/PriceList.sol";
 import {StorageTerms} from "../lib/StorageTerms.sol";
 import {FWSSDataSetModule} from "../modules/FWSSDataSetModule.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
+import {IRailV2} from "@filecoin-pay-v2/interfaces/IRail.sol";
 import {IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -22,7 +23,13 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 /// @title IFilecoinWarmStorageService
 /// @notice The functions, events and errors of the facets the proxy routes to, per josuke abi.
-interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSchedule, IValidator, PDPListener {
+interface IFilecoinWarmStorageService is
+    IFilecoinServiceMetadata,
+    IPDPProvingSchedule,
+    IRailV2,
+    IValidator,
+    PDPListener
+{
     event CDNPaymentRailsToppedUp(
         uint256 indexed dataSetId,
         uint256 cdnAmountAdded,
@@ -57,6 +64,15 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     event FilBeamControllerChanged(address oldController, address newController);
     event Initialized(uint64 version);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event PDPPaymentSettled(
+        uint256 indexed dataSetId,
+        uint256 indexed railId,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 payout,
+        uint256 refund,
+        uint256 held
+    );
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
     event PieceAdded(
         uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
@@ -150,6 +166,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error ProvingPeriodNotInitialized(uint256 dataSetId);
     error ProvingPeriodPassed(uint256 dataSetId, uint256 deadline, uint256 nowBlock);
     error RailNotFullySettled(uint256 railId, uint256 settledUpTo, uint256 endEpoch);
+    error RateTooLarge(uint256 rate);
     error ServiceContractMustTerminateRail();
     error StorageProviderChangesNotSupported();
     error StorageTermsNotEnabled(bytes32 storageTermsId);
